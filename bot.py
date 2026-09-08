@@ -103,6 +103,23 @@ def save_order(order):
         )
 
 
+def load_orders():
+    if not ORDERS_FILE.exists():
+        return []
+    try:
+        with open(ORDERS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError):
+        logging.exception("orders.json o'qilmadi")
+        return []
+
+
+def save_orders(orders):
+    with open(ORDERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(orders, f, ensure_ascii=False, indent=2)
+
+
 def is_admin(user_id: int) -> bool:
     return ADMIN_ID != 0 and user_id == ADMIN_ID
 
@@ -113,6 +130,23 @@ def payment_label(payment: str) -> str:
         "payme": "Payme",
         "click": "Click",
     }.get(payment, payment)
+
+
+def payment_status_label(status: str) -> str:
+    return {
+        "cash_on_delivery": "Naqd — yetkazib berishda",
+        "pending": "Kutilmoqda",
+        "paid": "To'langan",
+        "failed": "To'lov amalga oshmadi",
+    }.get(status, status)
+
+
+def payment_is_configured(payment: str) -> bool:
+    if payment == "payme":
+        return bool(os.getenv("PAYME_MERCHANT_ID", "").strip())
+    if payment == "click":
+        return bool(os.getenv("CLICK_MERCHANT_ID", "").strip())
+    return True
 
 
 def payment_link(payment: str, amount: int, user_id: int) -> str:
@@ -221,42 +255,105 @@ async def handle_webapp_order(message: Message):
 
     order_text = "\n".join(lines)
 
+    order_id = uuid.uuid4().hex[:8].upper()
+
+    if payment == "naqd":
+        payment_status = "cash_on_delivery"
+    elif payment_is_configured(payment):
+        payment_status = "pending"
+    else:
+        # API/merchant ma'lumoti hali yo'q: buyurtma saqlanadi,
+        # lekin mijozga soxta to'lov havolasi berilmaydi.
+        payment_status = "pending"
+
     order_record = {
-        "order_id": uuid.uuid4().hex[:8].upper(),
+        "order_id": order_id,
         "status": "accepted",
         "user_id": message.from_user.id,
         "username": message.from_user.username,
         "customer": customer,
         "items": items,
         "payment": payment,
+        "payment_status": payment_status,
         "delivery": delivery,
         "total": total,
     }
 
     save_order(order_record)
 
+    order_text += (
+        f"\n💳 <b>To'lov holati:</b> {payment_status_label(payment_status)}"
+        f"\n🆔 <b>Buyurtma:</b> #{order_id}"
+    )
+
     if ADMIN_ID:
         await bot.send_message(ADMIN_ID, order_text)
 
     if payment == "naqd":
         await message.answer(
-            "✅ Buyurtmangiz qabul qilindi!\n"
-            "Tez orada siz bilan bog'lanamiz.\n"
-            "To'lov: yetkazib berishda naqd."
+            f"✅ Buyurtmangiz #{order_id} qabul qilindi!\n\n"
+            "💵 To'lov yetkazib berishda naqd amalga oshiriladi."
+        )
+    elif not payment_is_configured(payment):
+        await message.answer(
+            f"✅ Buyurtmangiz #{order_id} qabul qilindi!\n\n"
+            f"💳 {payment_label(payment)} hozircha do'konga ulanmagan.\n"
+            "Admin to'lov tizimini ulaganidan keyin online to'lov ishlaydi.\n\n"
+            "Hozircha buyurtmangiz to'lov kutilmoqda holatida saqlandi."
         )
     else:
-        link = payment_link(
-            payment,
-            int(total),
-            message.from_user.id,
-        )
-
+        link = payment_link(payment, int(total), message.from_user.id)
         await message.answer(
-            "✅ Buyurtmangiz qabul qilindi!\n\n"
-            f"To'lov uchun havola:\n{link}\n\n"
-            "To'lovdan so'ng buyurtmangiz tasdiqlanadi."
+            f"✅ Buyurtmangiz #{order_id} qabul qilindi!\n\n"
+            f"💳 To'lov uchun havola:\n{link}\n\n"
+            "To'lovdan so'ng buyurtma to'langan deb belgilanadi."
         )
 
+
+
+@router.message(Command("tolov"))
+async def cmd_payment_status(message: Message, command: CommandObject):
+    if not is_admin(message.from_user.id):
+        return
+
+    args = (command.args or "").split()
+    if len(args) != 2 or args[1].lower() not in {"paid", "pending", "failed"}:
+        await message.answer(
+            "Format: /tolov BUYURTMA_ID paid|pending|failed\n\n"
+            "Masalan: /tolov A1B2C3D4 paid"
+        )
+        return
+
+    order_id, new_payment_status = args[0].upper(), args[1].lower()
+    orders = load_orders()
+    found = None
+
+    for order in orders:
+        if str(order.get("order_id", "")).upper() == order_id:
+            order["payment_status"] = new_payment_status
+            found = order
+            break
+
+    if not found:
+        await message.answer(f"❌ #{order_id} topilmadi.")
+        return
+
+    save_orders(orders)
+
+    user_id = found.get("user_id")
+    if user_id:
+        try:
+            await bot.send_message(
+                user_id,
+                f"💳 Buyurtma #{order_id} to'lov holati: "
+                f"<b>{payment_status_label(new_payment_status)}</b>"
+            )
+        except Exception as e:
+            logging.warning("Mijozga to'lov holati yuborilmadi: %s", e)
+
+    await message.answer(
+        f"✅ #{order_id} → {payment_status_label(new_payment_status)}"
+    )
 
 
 @router.message(Command("status"))
