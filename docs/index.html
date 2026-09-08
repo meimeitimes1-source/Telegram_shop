@@ -53,10 +53,6 @@ header p{margin:0;color:var(--hint);font-size:13px}
   border:0;outline:0;background:transparent;color:var(--text);
   width:100%;font-size:14px;
 }
-.search{position:sticky;top:8px;z-index:12;box-shadow:0 4px 14px rgba(0,0,0,.08)}
-.sort-row{display:flex;align-items:center;gap:8px;padding:0 16px 14px}
-.sort-row label{font-size:12px;color:var(--hint);white-space:nowrap}
-.sort-select{flex:1;min-width:0;padding:9px 12px;border-radius:12px;border:1px solid var(--border);background:var(--section-bg);color:var(--text);outline:none;font-size:13px}
 
 .hero{
   margin:0 16px 16px;
@@ -406,6 +402,74 @@ input:focus{border-color:var(--accent)}
   .hero,.search{margin-left:10px;margin-right:10px}
   header{padding-left:10px;padding-right:10px}
 }
+
+/* ===== Enhanced product information ===== */
+.detail-meta-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:9px;
+  padding:0 16px;
+  margin-top:4px;
+}
+.detail-meta{
+  background:var(--section-bg);
+  border:1px solid var(--border);
+  border-radius:11px;
+  padding:11px;
+}
+.detail-meta .meta-label{
+  display:block;
+  color:var(--hint);
+  font-size:11px;
+  margin-bottom:4px;
+}
+.detail-meta .meta-value{
+  font-size:13px;
+  font-weight:750;
+}
+.stock-ok{color:var(--accent)}
+.stock-low{color:var(--danger)}
+.detail-policy{
+  background:var(--section-bg);
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+}
+.policy-row{
+  display:flex;
+  gap:10px;
+  padding:11px 13px;
+  border-bottom:1px solid var(--border);
+  font-size:13px;
+}
+.policy-row:last-child{border-bottom:0}
+.policy-icon{font-size:18px;width:24px}
+.policy-row b{display:block;margin-bottom:2px}
+.policy-row span{color:var(--hint);line-height:1.4}
+.sort-row{
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  padding:0 16px 12px;
+  scrollbar-width:none;
+}
+.sort-row::-webkit-scrollbar{display:none}
+.sort-btn{
+  flex:0 0 auto;
+  border:1px solid var(--border);
+  background:var(--section-bg);
+  color:var(--text);
+  border-radius:9px;
+  padding:8px 11px;
+  font-size:12px;
+}
+.sort-btn.active{
+  background:var(--accent);
+  border-color:var(--accent);
+  color:#fff;
+  font-weight:750;
+}
+
 </style>
 </head>
 
@@ -437,16 +501,14 @@ input:focus{border-color:var(--accent)}
 
 <div class="categories" id="categories"></div>
 
-<div class="sort-row">
-  <label for="sortSelect">Saralash:</label>
-  <select class="sort-select" id="sortSelect">
-    <option value="default">Tavsiya etilgan</option>
-    <option value="cheap">Arzonidan qimmatga</option>
-    <option value="expensive">Qimmatidan arzonga</option>
-    <option value="new">Yangi kelgan</option>
-    <option value="best">Eng ko‘p sotilgan</option>
-  </select>
+<div class="sort-row" id="sortRow">
+  <button class="sort-btn active" data-sort="default">Tavsiya</button>
+  <button class="sort-btn" data-sort="price_asc">Arzonidan qimmatga</button>
+  <button class="sort-btn" data-sort="price_desc">Qimmatidan arzonga</button>
+  <button class="sort-btn" data-sort="new">🆕 Yangi kelgan</button>
+  <button class="sort-btn" data-sort="sold">🔥 Eng ko‘p sotilgan</button>
 </div>
+
 
 <div class="section-head">
   <h2 id="productsTitle">Barcha mahsulotlar</h2>
@@ -573,6 +635,45 @@ input:focus{border-color:var(--accent)}
       <div class="detail-desc" id="detailDesc"></div>
     </div>
 
+
+<div class="detail-meta-grid">
+  <div class="detail-meta">
+    <span class="meta-label">📦 Omborda</span>
+    <span class="meta-value" id="detailStock">—</span>
+  </div>
+  <div class="detail-meta">
+    <span class="meta-label">🚚 Yetkazib berish</span>
+    <span class="meta-value" id="detailDelivery">—</span>
+  </div>
+</div>
+
+<div class="detail-section">
+  <h3>ℹ️ Muhim ma’lumotlar</h3>
+  <div class="detail-policy">
+    <div class="policy-row">
+      <div class="policy-icon">📦</div>
+      <div>
+        <b>Ombordagi qoldiq</b>
+        <span id="detailStockText">—</span>
+      </div>
+    </div>
+    <div class="policy-row">
+      <div class="policy-icon">🚚</div>
+      <div>
+        <b>Yetkazib berish muddati</b>
+        <span id="detailDeliveryText">—</span>
+      </div>
+    </div>
+    <div class="policy-row">
+      <div class="policy-icon">🔄</div>
+      <div>
+        <b>Qaytarish shartlari</b>
+        <span id="detailReturnText">—</span>
+      </div>
+    </div>
+  </div>
+</div>
+
     <div class="detail-section">
       <h3>Xususiyatlari</h3>
       <div class="specs" id="detailSpecs"></div>
@@ -631,7 +732,6 @@ let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
 let activeCategory = "Barchasi";
 let activePayment = "naqd";
 let currentProduct = null;
-let activeSort = "default";
 
 const $ = id => document.getElementById(id);
 
@@ -656,27 +756,63 @@ function escapeHtml(value){
     .replaceAll("'","&#039;");
 }
 
-function photoUrl(value){
-  if(!value) return "";
-  if(typeof value === "string" && value.startsWith("http")) return value;
-  return API_URL + "/photo/" + encodeURIComponent(String(value));
+function photoUrl(url){
+  return url || "";
 }
 
 function productPhoto(p){
   if(!p) return "";
-  if(p.photo_file_id) return photoUrl(p.photo_file_id);
-  if(Array.isArray(p.photos) && p.photos.length) return photoUrl(p.photos[0]);
-  return photoUrl(p.photo);
+  if(p.photo_file_id){
+    return API_URL + "/photo/" + encodeURIComponent(p.photo_file_id);
+  }
+  if(Array.isArray(p.photos) && p.photos.length){
+    return p.photos[0] || "";
+  }
+  return p.photo || "";
 }
 
-function sortProducts(list){
-  const arr = [...list];
-  if(activeSort === "cheap") return arr.sort((a,b) => Number(a.price||0)-Number(b.price||0));
-  if(activeSort === "expensive") return arr.sort((a,b) => Number(b.price||0)-Number(a.price||0));
-  if(activeSort === "new") return arr.sort((a,b) => Number(b.id||0)-Number(a.id||0));
-  if(activeSort === "best") return arr.sort((a,b) => Number(b.sold||b.sales||b.orders||0)-Number(a.sold||a.sales||a.orders||0));
-  return arr;
+function getProductImages(p){
+  if(!p) return [];
+  if(p.photo_file_id){
+    return [API_URL + "/photo/" + encodeURIComponent(p.photo_file_id)];
+  }
+  if(Array.isArray(p.photos) && p.photos.length){
+    return p.photos.filter(Boolean);
+  }
+  return p.photo ? [p.photo] : [];
 }
+
+let activeSort = "default";
+
+function sortProducts(list){
+  const copy = [...list];
+
+  if(activeSort === "price_asc"){
+    return copy.sort((a,b) => Number(a.price||0) - Number(b.price||0));
+  }
+
+  if(activeSort === "price_desc"){
+    return copy.sort((a,b) => Number(b.price||0) - Number(a.price||0));
+  }
+
+  if(activeSort === "new"){
+    return copy.sort((a,b) =>
+      String(b.created_at || b.createdAt || b.date || "").localeCompare(
+        String(a.created_at || a.createdAt || a.date || "")
+      )
+    );
+  }
+
+  if(activeSort === "sold"){
+    return copy.sort((a,b) =>
+      Number(b.sold || b.sales || b.sold_count || 0) -
+      Number(a.sold || a.sales || a.sold_count || 0)
+    );
+  }
+
+  return copy;
+}
+
 
 /* ================= PRODUCTS ================= */
 
@@ -1018,7 +1154,7 @@ function changeQty(id, delta){
       qty:newQty,
       name:p.name,
       price:Number(p.price) || 0,
-      photo:productPhoto(p)
+      photo:p.photo || ""
     };
 
   }
@@ -1339,17 +1475,10 @@ function openDetail(id){
 
   const p = currentProduct;
 
-  const imgs =
-    p.photo_file_id
-      ? [p.photo_file_id]
-      : Array.isArray(p.photos) && p.photos.length
-        ? p.photos
-        : p.photo
-          ? [p.photo]
-          : [];
+  const imgs = getProductImages(p);
 
   $("detailMainImg").src =
-    photoUrl(imgs[0] || "");
+    imgs[0] || "";
 
   $("detailName").textContent =
     p.name || "";
@@ -1370,7 +1499,39 @@ function openDetail(id){
             ? ` • ${p.reviews} ta sharh`
             : ""
         }`
-      : "";
+      : "⭐ Hali baholanmagan";
+
+  const stock = Number(
+    p.stock ?? p.quantity ?? p.inventory ?? 0
+  );
+
+  const delivery =
+    p.delivery_time ||
+    p.deliveryTime ||
+    p.delivery ||
+    "1–3 ish kuni";
+
+  const returnPolicy =
+    p.return_policy ||
+    p.returnPolicy ||
+    p.returns ||
+    "Mahsulot holatiga qarab 7 kun ichida qaytarish mumkin.";
+
+  const stockLabel =
+    stock > 0
+      ? `${stock} dona mavjud`
+      : (p.stock == null && p.quantity == null && p.inventory == null
+          ? "Mavjudligi admin tomonidan belgilanadi"
+          : "Hozircha mavjud emas");
+
+  $("detailStock").textContent = stockLabel;
+  $("detailStock").className =
+    "meta-value " + (stock > 0 ? "stock-ok" : "stock-low");
+
+  $("detailDelivery").textContent = delivery;
+  $("detailStockText").textContent = stockLabel;
+  $("detailDeliveryText").textContent = delivery;
+  $("detailReturnText").textContent = returnPolicy;
 
   $("detailDesc").textContent =
     p.long_desc ||
@@ -1415,9 +1576,9 @@ function openDetail(id){
 
       ? imgs.map((img,index) => `
           <img
-            src="${photoUrl(img)}"
+            src="${img}"
             class="${index === 0 ? "active" : ""}"
-            data-img="${photoUrl(img)}"
+            data-img="${img}"
             alt=""
           >
         `).join("")
@@ -1593,6 +1754,21 @@ $("navProfile").onclick = () => {
 
 };
 
+
+/* Sorting */
+document.querySelectorAll("[data-sort]")
+  .forEach(btn => {
+    btn.onclick = () => {
+      activeSort = btn.dataset.sort;
+
+      document.querySelectorAll("[data-sort]")
+        .forEach(x => x.classList.remove("active"));
+
+      btn.classList.add("active");
+      renderGrid();
+    };
+  });
+
 /* Search */
 $("searchInput").oninput = () => {
 
@@ -1699,7 +1875,7 @@ function showFavoritesView(list){
             </button>
 
             <img
-              src="${photoUrl(p.photo)}"
+              src="${productPhoto(p)}"
               alt="${escapeHtml(p.name)}"
               loading="lazy"
             >
@@ -1808,18 +1984,6 @@ function showFavoritesView(list){
     });
 
 }
-
-/* SORT + SEARCH */
-if($("sortSelect")){
-  $("sortSelect").addEventListener("change", e => {
-    activeSort = e.target.value;
-    renderGrid();
-  });
-}
-
-$("searchInput")?.addEventListener("input", () => {
-  renderGrid();
-});
 
 /* Start */
 loadTelegramProfile();
