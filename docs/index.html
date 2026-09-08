@@ -282,6 +282,16 @@ input:focus{border-color:var(--accent)}
   border-color:var(--accent);
   background:var(--accent);color:#fff;font-weight:700;
 }
+.payment-notice{
+  margin-top:10px;
+  padding:10px 12px;
+  border-radius:10px;
+  background:var(--section-bg);
+  border:1px solid var(--border);
+  color:var(--hint);
+  font-size:12px;
+  line-height:1.4;
+}
 .checkout-btn{
   width:100%;margin-top:18px;
   background:var(--accent);color:#fff;
@@ -634,6 +644,7 @@ input:focus{border-color:var(--accent)}
     <div class="pay-chip" data-pay="payme">Payme</div>
     <div class="pay-chip" data-pay="click">Click</div>
   </div>
+  <div id="paymentNotice" class="payment-notice">💵 Naqd: to'lov yetkazib berishda amalga oshiriladi.</div>
 
   <div class="total-row">
     <span>Jami</span>
@@ -795,6 +806,18 @@ let cart = JSON.parse(localStorage.getItem("cart") || "{}");
 let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
 let activeCategory = "Barchasi";
 let activePayment = "naqd";
+
+const PAYMENT_INFO = {
+  naqd: "💵 Naqd: to'lov yetkazib berishda amalga oshiriladi.",
+  payme: "🟢 Payme: API hozircha ulanmagan. Tizim haqiqiy Payme integratsiyasiga tayyor.",
+  click: "🔵 Click: API hozircha ulanmagan. Tizim haqiqiy Click integratsiyasiga tayyor."
+};
+
+function updatePaymentNotice(){
+  const el = $("paymentNotice");
+  if(el) el.textContent = PAYMENT_INFO[activePayment] || "To'lov turi tanlandi.";
+}
+
 let currentProduct = null;
 let selectedReviewRating = 0;
 
@@ -1446,6 +1469,8 @@ document.querySelectorAll(".pay-chip")
 
       activePayment =
         chip.dataset.pay;
+
+      updatePaymentNotice();
 
     };
 
@@ -2195,6 +2220,7 @@ function showFavoritesView(list){
 
 /* Start */
 loadTelegramProfile();
+updatePaymentNotice();
 loadProducts();
 </script>
 
