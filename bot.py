@@ -28,6 +28,7 @@ PORT = int(os.getenv("PORT", "8080"))
 BASE_DIR = Path(__file__).parent
 PRODUCTS_FILE = BASE_DIR / "products.json"
 ORDERS_FILE = BASE_DIR / "orders.json"
+REVIEWS_FILE = BASE_DIR / "reviews.json"
 
 logging.basicConfig(level=logging.INFO)
 
@@ -58,6 +59,23 @@ def load_products():
 def save_products(products):
     with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
         json.dump(products, f, ensure_ascii=False, indent=2)
+
+
+def load_reviews():
+    if not REVIEWS_FILE.exists():
+        return []
+    try:
+        with open(REVIEWS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def save_reviews(reviews):
+    with open(REVIEWS_FILE, "w", encoding="utf-8") as f:
+        json.dump(reviews, f, ensure_ascii=False, indent=2)
+
 
 
 def save_order(order):
@@ -658,6 +676,112 @@ async def get_telegram_photo(request):
 
 
 
+
+async def get_reviews_api(request: web.Request):
+    try:
+        product_id = str(request.query.get("product_id", "")).strip()
+        reviews = [
+            r for r in load_reviews()
+            if str(r.get("product_id", "")) == product_id
+            and not r.get("hidden", False)
+        ]
+        ratings = [int(r.get("rating", 0)) for r in reviews if 1 <= int(r.get("rating", 0)) <= 5]
+        average = round(sum(ratings) / len(ratings), 1) if ratings else 0
+        return web.json_response(
+            {"average": average, "count": len(reviews), "reviews": reviews},
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    except Exception:
+        return web.json_response(
+            {"average": 0, "count": 0, "reviews": []},
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+
+
+async def create_review_api(request: web.Request):
+    try:
+        data = await request.json()
+        product_id = str(data.get("product_id", "")).strip()
+        user_id = int(data.get("user_id", 0))
+        user_name = str(data.get("user_name", "Mijoz")).strip()[:80]
+        rating = int(data.get("rating", 0))
+        text = str(data.get("text", "")).strip()[:500]
+
+        if not product_id or not user_id:
+            return web.json_response({"error": "Ma'lumotlar to'liq emas"}, status=400)
+        if rating < 1 or rating > 5:
+            return web.json_response({"error": "Reyting 1 dan 5 gacha bo'lishi kerak"}, status=400)
+        if len(text) < 3:
+            return web.json_response({"error": "Sharh juda qisqa"}, status=400)
+
+        # Only customers with a delivered order containing this product may review it.
+        orders = load_orders()
+        eligible = False
+        for order in orders:
+            if int(order.get("user_id", 0)) != user_id:
+                continue
+            if str(order.get("status", "")).lower() != "delivered":
+                continue
+            for item in order.get("items", []):
+                item_id = item.get("id", item.get("product_id", ""))
+                if str(item_id) == product_id:
+                    eligible = True
+                    break
+            if eligible:
+                break
+
+        if not eligible:
+            return web.json_response(
+                {"error": "Sharh faqat yetkazilgan buyurtmadagi mahsulot uchun qoldiriladi."},
+                status=403,
+            )
+
+        reviews = load_reviews()
+        # One review per user/product; a later submission updates it.
+        existing = next(
+            (r for r in reviews
+             if int(r.get("user_id", 0)) == user_id
+             and str(r.get("product_id", "")) == product_id),
+            None
+        )
+
+        from datetime import datetime
+        review = {
+            "id": existing.get("id") if existing else datetime.now().strftime("%Y%m%d%H%M%S"),
+            "product_id": product_id,
+            "user_id": user_id,
+            "user_name": user_name or "Mijoz",
+            "rating": rating,
+            "text": text,
+            "date": datetime.now().strftime("%d.%m.%Y"),
+            "hidden": False,
+        }
+
+        if existing:
+            idx = reviews.index(existing)
+            reviews[idx] = review
+        else:
+            reviews.append(review)
+        save_reviews(reviews)
+
+        try:
+            await bot.send_message(
+                ADMIN_ID,
+                f"⭐ <b>Yangi mahsulot sharhi</b>\n\n"
+                f"Mahsulot ID: <code>{product_id}</code>\n"
+                f"Mijoz: {user_name}\n"
+                f"Reyting: {'⭐' * rating}\n"
+                f"Sharh: {text}"
+            )
+        except Exception:
+            pass
+
+        return web.json_response({"ok": True, "review": review},
+                                 headers={"Access-Control-Allow-Origin": "*"})
+    except Exception:
+        return web.json_response({"error": "Sharhni yuborishda xatolik"}, status=500)
+
+
 async def get_orders_api(request: web.Request):
     try:
         user_id = int(request.query.get("user_id", "0"))
@@ -699,6 +823,8 @@ async def start_web_server():
         get_telegram_photo,
     )
     app.router.add_get("/orders", get_orders_api)
+    app.router.add_get("/reviews", get_reviews_api)
+    app.router.add_post("/reviews", create_review_api)
 
     runner = web.AppRunner(app)
 
