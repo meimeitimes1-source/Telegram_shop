@@ -463,12 +463,12 @@ async def cmd_add_product(
         await message.answer(
             "Format:\n"
             "/qoshish Nomi | Narxi | Tavsif | "
-            "Rasm-havolasi | Turkum\n\n"
+            "Rasm-havolasi | Turkum | Ombor\n\n"
             "Masalan:\n"
             "/qoshish Krossovka | 450000 | "
             "Qora, 42-razmer | "
             "https://example.com/rasm.jpg | "
-            "Poyabzal"
+            "Poyabzal | 100"
         )
         return
 
@@ -488,9 +488,19 @@ async def cmd_add_product(
 
     category = (
         parts[4]
-        if len(parts) > 4
+        if len(parts) > 4 and parts[4]
         else "Umumiy"
     )
+
+    stock = 0
+    if len(parts) > 5 and parts[5]:
+        try:
+            stock = int(parts[5].replace(" ", "").replace(",", ""))
+            if stock < 0:
+                raise ValueError
+        except ValueError:
+            await message.answer("Ombor sonini faqat musbat raqamda kiriting. Masalan: 210")
+            return
 
     try:
         price = int(
@@ -520,6 +530,7 @@ async def cmd_add_product(
             "desc": desc,
             "photo": photo,
             "category": category,
+            "stock": stock,
         }
     )
 
@@ -528,9 +539,40 @@ async def cmd_add_product(
     await message.answer(
         f"✅ Qo'shildi: #{new_id} "
         f"{name} — {price:,} so'm\n\n"
+        f"📦 Omborda: {stock} dona\n\n"
         f"Rasm qo'yish uchun:\n"
         f"/rasm {new_id}"
     )
+
+
+@router.message(Command("ombor"))
+async def cmd_update_stock(message: Message, command: CommandObject):
+    if not is_admin(message.from_user.id):
+        return
+
+    args = (command.args or "").split()
+    if len(args) != 2 or not args[0].isdigit():
+        await message.answer("Format: /ombor <id> <soni>\nMasalan: /ombor 1 210")
+        return
+
+    pid = int(args[0])
+    try:
+        stock = int(args[1].replace(",", ""))
+        if stock < 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("Ombor sonini 0 yoki undan katta raqamda kiriting.")
+        return
+
+    products = load_products()
+    product = next((p for p in products if int(p.get("id", 0)) == pid), None)
+    if not product:
+        await message.answer(f"❌ #{pid} mahsulot topilmadi.")
+        return
+
+    product["stock"] = stock
+    save_products(products)
+    await message.answer(f"✅ #{pid} — {product['name']}\n📦 Omborda: {stock} dona")
 
 
 @router.message(Command("rasm"))
@@ -693,6 +735,7 @@ async def cmd_help(message: Message):
         "Rasm-havolasi | Turkum — mahsulot qo'shish\n"
         "/mahsulotlar — mahsulotlar ro'yxati\n"
         "/rasm <id> — mahsulotga Telegram rasmi qo'yish\n"
+            "/ombor <id> <soni> — ombor qoldig'ini o'zgartirish\n"
         "/ochirish <id> — mahsulotni o'chirish"
     )
 
