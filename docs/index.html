@@ -1420,6 +1420,7 @@ function closeSheets(){
   $("overlay").style.display = "none";
   $("cartSheet").style.display = "none";
   $("checkoutSheet").style.display = "none";
+  updateCartUI();
 
 }
 
@@ -1428,6 +1429,7 @@ $("overlay").onclick = closeSheets;
 $("cartBar").onclick = () => {
 
   renderCartLines();
+  $("cartBar").style.display = "none";
   openSheet($("cartSheet"));
 
 };
