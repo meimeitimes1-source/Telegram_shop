@@ -212,13 +212,25 @@ header p{margin:0;color:var(--hint);font-size:13px}
 /* Floating cart */
 .cart-bar{
   position:fixed;
-  left:16px;right:16px;bottom:78px;
+  left:12px;right:12px;bottom:78px;
   background:var(--accent);color:#fff;
-  border-radius:12px;padding:13px 16px;
+  border-radius:14px;padding:9px 10px 9px 16px;
   display:none;align-items:center;
   justify-content:space-between;
-  font-weight:700;z-index:24;
-  box-shadow:0 6px 20px rgba(0,0,0,.15);
+  gap:10px;font-weight:700;z-index:24;
+  box-shadow:0 6px 20px rgba(0,0,0,.18);
+}
+.cart-bar-info{
+  min-width:0;display:flex;flex-direction:column;
+  gap:2px;
+}
+.cart-bar-count{font-size:13px;opacity:.95}
+.cart-bar-total{font-size:15px;font-weight:800}
+.cart-bar-checkout{
+  flex:0 0 auto;border:0;border-radius:10px;
+  background:#fff;color:var(--accent);
+  padding:11px 15px;font-size:14px;font-weight:850;
+  cursor:pointer;
 }
 
 /* Sheets */
@@ -622,8 +634,13 @@ input:focus{border-color:var(--accent)}
 
 <!-- FLOATING CART -->
 <div class="cart-bar" id="cartBar">
-  <span id="cartBarText">Sotib olish</span>
-  <span id="cartBarTotal"></span>
+  <div class="cart-bar-info">
+    <span class="cart-bar-count" id="cartBarText">Savat</span>
+    <span class="cart-bar-total" id="cartBarTotal"></span>
+  </div>
+  <button class="cart-bar-checkout" id="cartBarCheckout" type="button">
+    Rasmiylashtirish
+  </button>
 </div>
 
 <!-- OVERLAY -->
@@ -1451,6 +1468,20 @@ function closeSheets(){
 $("overlay").onclick = closeSheets;
 
 $("cartBar").onclick = () => {
+
+  if(!cartCount()){
+    alert("Savat bo‘sh.");
+    return;
+  }
+
+  renderCartLines();
+  openSheet($("cartSheet"));
+
+};
+
+$("cartBarCheckout").onclick = (event) => {
+
+  event.stopPropagation();
 
   if(!cartCount()){
     alert("Savat bo‘sh.");
