@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import uuid
 import os
 from pathlib import Path
 
@@ -170,6 +171,7 @@ async def handle_webapp_order(message: Message):
     items = data.get("items", [])
     customer = data.get("customer", {})
     payment = data.get("payment", "naqd")
+    delivery = data.get("delivery", 0)
     total = data.get("total", 0)
 
     if not items:
@@ -202,11 +204,14 @@ async def handle_webapp_order(message: Message):
     order_text = "\n".join(lines)
 
     order_record = {
+        "order_id": uuid.uuid4().hex[:8].upper(),
+        "status": "accepted",
         "user_id": message.from_user.id,
         "username": message.from_user.username,
         "customer": customer,
         "items": items,
         "payment": payment,
+        "delivery": delivery,
         "total": total,
     }
 
@@ -233,6 +238,70 @@ async def handle_webapp_order(message: Message):
             f"To'lov uchun havola:\n{link}\n\n"
             "To'lovdan so'ng buyurtmangiz tasdiqlanadi."
         )
+
+
+
+@router.message(Command("status"))
+async def cmd_status(message: Message, command: CommandObject):
+    if not is_admin(message.from_user.id):
+        return
+
+    args = (command.args or "").split()
+    if len(args) != 2:
+        await message.answer(
+            "Format: /status BUYURTMA_ID STATUS\n\n"
+            "accepted — Qabul qilindi\n"
+            "preparing — Tayyorlanmoqda\n"
+            "delivering — Yo'lda\n"
+            "delivered — Yetkazildi"
+        )
+        return
+
+    order_id, new_status = args[0].upper(), args[1].lower()
+    labels = {
+        "accepted": "Qabul qilindi",
+        "preparing": "Tayyorlanmoqda",
+        "delivering": "Yo'lda",
+        "delivered": "Yetkazildi",
+    }
+    if new_status not in labels:
+        await message.answer("Status noto'g'ri.")
+        return
+
+    orders = []
+    if ORDERS_FILE.exists():
+        try:
+            with open(ORDERS_FILE, "r", encoding="utf-8") as f:
+                orders = json.load(f)
+        except Exception:
+            orders = []
+
+    found = None
+    for order in orders:
+        if str(order.get("order_id", "")).upper() == order_id:
+            order["status"] = new_status
+            found = order
+            break
+
+    if not found:
+        await message.answer(f"#{order_id} topilmadi.")
+        return
+
+    with open(ORDERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(orders, f, ensure_ascii=False, indent=2)
+
+    user_id = found.get("user_id")
+    if user_id:
+        try:
+            await bot.send_message(
+                user_id,
+                f"📦 <b>#{order_id}</b> buyurtmangiz holati:\n"
+                f"<b>{labels[new_status]}</b>"
+            )
+        except Exception as e:
+            logging.warning("Status xabari yuborilmadi: %s", e)
+
+    await message.answer(f"✅ #{order_id} → {labels[new_status]}")
 
 
 @router.message(Command("mahsulotlar"))
@@ -588,6 +657,35 @@ async def get_telegram_photo(request):
         )
 
 
+
+async def get_orders_api(request: web.Request):
+    try:
+        user_id = int(request.query.get("user_id", "0"))
+    except ValueError:
+        user_id = 0
+
+    if not user_id:
+        return web.json_response(
+            {"error": "user_id kerak"},
+            status=400,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+
+    orders = []
+    if ORDERS_FILE.exists():
+        try:
+            with open(ORDERS_FILE, "r", encoding="utf-8") as f:
+                orders = json.load(f)
+        except Exception:
+            orders = []
+
+    user_orders = [o for o in orders if int(o.get("user_id", 0)) == user_id]
+    return web.json_response(
+        user_orders[-20:][::-1],
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
+
+
 async def start_web_server():
     app = web.Application()
 
@@ -600,6 +698,7 @@ async def start_web_server():
         "/photo/{file_id}",
         get_telegram_photo,
     )
+    app.router.add_get("/orders", get_orders_api)
 
     runner = web.AppRunner(app)
 
