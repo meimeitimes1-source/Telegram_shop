@@ -376,6 +376,21 @@ input:focus{border-color:var(--accent)}
 }
 .profile-name{font-size:17px;font-weight:800}
 .profile-username{font-size:12px;color:var(--hint);margin-top:3px}
+
+.order-list{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.order-card{background:var(--section-bg);border:1px solid var(--border);border-radius:16px;padding:14px}
+.order-card-top{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.order-id{font-weight:800}
+.order-status{font-size:12px;padding:6px 9px;border-radius:999px;background:#eaf5ef;color:var(--accent);font-weight:700}
+.order-meta{color:var(--hint);font-size:12px;margin-top:8px}
+.order-items{font-size:13px;margin-top:9px}
+.order-total{font-weight:800;margin-top:10px}
+.status-track{display:flex;justify-content:space-between;gap:4px;margin-top:14px}
+.status-step{flex:1;text-align:center;font-size:10px;color:var(--hint)}
+.status-dot{width:10px;height:10px;border-radius:50%;background:var(--border);margin:0 auto 5px}
+.status-step.active{color:var(--accent);font-weight:700}
+.status-step.active .status-dot{background:var(--accent)}
+
 .profile-actions{display:grid;gap:9px;margin-top:14px}
 .profile-action{
   width:100%;border:1px solid var(--border);
@@ -546,6 +561,8 @@ input:focus{border-color:var(--accent)}
         <div class="profile-username" id="profileUsername"></div>
       </div>
     </div>
+
+    <div id="ordersBox"></div>
 
     <div class="profile-actions">
       <button class="profile-action" id="profileOrders">📦 Mening buyurtmalarim</button>
@@ -1436,6 +1453,7 @@ $("submitOrder").onclick = () => {
 
     payment:activePayment,
 
+    delivery:0, // keyin Yandex Delivery API real narxini beradi
     total:cartTotal()
 
   };
@@ -1822,14 +1840,65 @@ $("profileFavorites").onclick = () => {
 
 };
 
-$("profileOrders").onclick = () => {
+$("profileOrders").onclick = async () => {
+  showView("profileView");
+  setNavActive("navProfile");
+  const box = $("ordersBox");
+  box.innerHTML = '<div class="empty">📦 Buyurtmalar yuklanmoqda...</div>';
 
-  alert(
-    "📦 Buyurtmalar tarixi\n\n" +
-    "Bu bo‘lim keyingi bosqichda " +
-    "backend bilan ulanadi."
-  );
+  const userId = tg?.initDataUnsafe?.user?.id;
+  if(!userId){
+    box.innerHTML = '<div class="empty">Telegram foydalanuvchisi aniqlanmadi.</div>';
+    return;
+  }
 
+  try{
+    const res = await fetch(API_BASE + "/orders?user_id=" + encodeURIComponent(userId));
+    if(!res.ok) throw new Error("orders");
+    const orders = await res.json();
+
+    if(!orders.length){
+      box.innerHTML = '<div class="empty">📦 Hozircha buyurtmalar yo‘q.</div>';
+      return;
+    }
+
+    const labels = {
+      accepted:"Qabul qilindi",
+      preparing:"Tayyorlanmoqda",
+      delivering:"Yo‘lda",
+      delivered:"Yetkazildi"
+    };
+    const steps = ["accepted","preparing","delivering","delivered"];
+
+    box.innerHTML = '<div class="order-list">' + orders.map(o => {
+      const current = Math.max(0, steps.indexOf(o.status || "accepted"));
+      const status = labels[o.status] || labels.accepted;
+      const items = (o.items || []).map(i =>
+        `${escapeHtml(i.name)} ×${Number(i.qty || 0)}`
+      ).join(", ");
+
+      const track = steps.map((s, idx) => `
+        <div class="status-step ${idx <= current ? "active" : ""}">
+          <div class="status-dot"></div>${labels[s]}
+        </div>
+      `).join("");
+
+      return `
+        <div class="order-card">
+          <div class="order-card-top">
+            <div class="order-id">#${escapeHtml(o.order_id || "")}</div>
+            <div class="order-status">${status}</div>
+          </div>
+          <div class="order-meta">${escapeHtml(o.customer?.address || "-")}</div>
+          <div class="order-items">${items || "Mahsulotlar"}</div>
+          <div class="order-total">${money(Number(o.total || 0))}</div>
+          <div class="status-track">${track}</div>
+        </div>
+      `;
+    }).join("") + "</div>";
+  }catch(e){
+    box.innerHTML = '<div class="empty">❌ Buyurtmalarni yuklashda xatolik.</div>';
+  }
 };
 
 function showFavoritesView(list){
