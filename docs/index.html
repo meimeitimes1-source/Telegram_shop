@@ -361,6 +361,27 @@ input:focus{border-color:var(--accent)}
   padding:14px;font-size:16px;font-weight:800;
 }
 
+
+.review-box{margin:16px;background:var(--section-bg);border:1px solid var(--border);border-radius:14px;padding:15px}
+.review-title{font-size:16px;font-weight:800;margin-bottom:10px}
+.review-summary{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.review-big{font-size:28px;font-weight:850}
+.review-stars{font-size:20px;letter-spacing:1px}
+.review-count{font-size:12px;color:var(--hint)}
+.review-list{display:flex;flex-direction:column;gap:10px}
+.review-item{padding:11px 0;border-top:1px solid var(--border)}
+.review-head{display:flex;justify-content:space-between;gap:8px}
+.review-user{font-weight:700;font-size:13px}
+.review-date{font-size:11px;color:var(--hint)}
+.review-text{font-size:13px;line-height:1.45;margin-top:5px;white-space:pre-line}
+.review-form{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.star-picker{display:flex;gap:5px;margin:8px 0 10px}
+.star-picker button{border:0;background:transparent;font-size:28px;padding:2px;color:#c8c8c8}
+.star-picker button.active{color:var(--gold)}
+.review-input{width:100%;min-height:78px;resize:none;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--bg);color:var(--text);font:inherit;box-sizing:border-box}
+.review-submit{width:100%;border:0;border-radius:10px;background:var(--accent);color:#fff;padding:11px;margin-top:8px;font-weight:800}
+.review-login-note{font-size:12px;color:var(--hint);line-height:1.45}
+
 /* Profile */
 .profile-card{
   background:var(--section-bg);
@@ -390,13 +411,6 @@ input:focus{border-color:var(--accent)}
 .status-dot{width:10px;height:10px;border-radius:50%;background:var(--border);margin:0 auto 5px}
 .status-step.active{color:var(--accent);font-weight:700}
 .status-step.active .status-dot{background:var(--accent)}
-
-
-.bonus-card{margin-top:14px;background:var(--section-bg);border:1px solid var(--border);border-radius:14px;padding:16px}
-.bonus-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
-.bonus-label{font-size:12px;color:var(--hint)}
-.bonus-value{font-size:23px;font-weight:850;color:var(--accent);margin-top:3px}
-.bonus-note{font-size:11px;color:var(--hint);margin-top:8px;line-height:1.4}
 
 .profile-actions{display:grid;gap:9px;margin-top:14px}
 .profile-action{
@@ -571,17 +585,6 @@ input:focus{border-color:var(--accent)}
 
     <div id="ordersBox"></div>
 
-    <div class="bonus-card">
-      <div class="bonus-top">
-        <div>
-          <div class="bonus-label">🎁 Bonus balansingiz</div>
-          <div class="bonus-value" id="bonusBalance">0 so‘m</div>
-        </div>
-        <div style="font-size:28px">💰</div>
-      </div>
-      <div class="bonus-note">Har bir yetkazilgan buyurtmadan 1% bonus yig‘iladi. Bonus keyingi xaridlarda ishlatiladi.</div>
-    </div>
-
     <div class="profile-actions">
       <button class="profile-action" id="profileOrders">📦 Mening buyurtmalarim</button>
       <button class="profile-action" id="profileFavorites">❤️ Sevimlilar</button>
@@ -716,7 +719,33 @@ input:focus{border-color:var(--accent)}
 
   </div>
 
-  <div class="detail-bottom">
+  
+<div class="review-box">
+  <div class="review-title">⭐ Mijozlar bahosi va sharhlari</div>
+  <div class="review-summary">
+    <div class="review-big" id="reviewAverage">—</div>
+    <div>
+      <div class="review-stars" id="reviewStars">☆☆☆☆☆</div>
+      <div class="review-count" id="reviewCount">Hali sharh yo‘q</div>
+    </div>
+  </div>
+  <div class="review-list" id="reviewList"></div>
+  <div class="review-form" id="reviewForm">
+    <div style="font-size:13px;font-weight:700">Baholang</div>
+    <div class="star-picker" id="starPicker">
+      <button type="button" data-star="1">★</button>
+      <button type="button" data-star="2">★</button>
+      <button type="button" data-star="3">★</button>
+      <button type="button" data-star="4">★</button>
+      <button type="button" data-star="5">★</button>
+    </div>
+    <textarea class="review-input" id="reviewText" maxlength="500" placeholder="Mahsulot haqida fikringizni yozing..."></textarea>
+    <button class="review-submit" id="submitReview">Sharh yuborish</button>
+    <div class="review-login-note" id="reviewNote" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<div class="detail-bottom">
     <button class="detail-add" id="detailAdd">
       🛒 Savatga qo‘shish
     </button>
@@ -767,26 +796,9 @@ let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
 let activeCategory = "Barchasi";
 let activePayment = "naqd";
 let currentProduct = null;
+let selectedReviewRating = 0;
 
 const $ = id => document.getElementById(id);
-
-async function loadBonus(){
-  const el = $("bonusBalance");
-  if(!el) return;
-  const userId = tg?.initDataUnsafe?.user?.id;
-  if(!userId){
-    el.textContent = "0 so‘m";
-    return;
-  }
-  try{
-    const res = await fetch(API_URL + "/bonus?user_id=" + encodeURIComponent(userId), {cache:"no-store"});
-    if(!res.ok) throw new Error("bonus");
-    const data = await res.json();
-    el.textContent = money(Number(data.balance || 0));
-  }catch(e){
-    el.textContent = "0 so‘m";
-  }
-}
 
 function saveCart(){
   localStorage.setItem("cart", JSON.stringify(cart));
@@ -1490,7 +1502,6 @@ $("submitOrder").onclick = () => {
     payment:activePayment,
 
     delivery:0, // keyin Yandex Delivery API real narxini beradi
-    bonus_used:0,
     total:cartTotal()
 
   };
@@ -1518,6 +1529,97 @@ $("submitOrder").onclick = () => {
 };
 
 /* ================= PRODUCT DETAIL ================= */
+
+
+function reviewStars(value){
+  const n = Math.max(0, Math.min(5, Number(value || 0)));
+  return "★★★★★".slice(0,n) + "☆☆☆☆☆".slice(0,5-n);
+}
+
+async function loadProductReviews(productId){
+  if(!$("reviewList")) return;
+  $("reviewList").innerHTML = '<div class="review-login-note">⏳ Sharhlar yuklanmoqda...</div>';
+  try{
+    const res = await fetch(API_URL + "/reviews?product_id=" + encodeURIComponent(productId), {cache:"no-store"});
+    if(!res.ok) throw new Error("reviews");
+    const data = await res.json();
+    const reviews = Array.isArray(data.reviews) ? data.reviews : [];
+    const avg = Number(data.average || 0);
+    $("reviewAverage").textContent = avg ? avg.toFixed(1) : "—";
+    $("reviewStars").textContent = avg ? reviewStars(Math.round(avg)) : "☆☆☆☆☆";
+    $("reviewCount").textContent = reviews.length ? `${reviews.length} ta sharh` : "Hali sharh yo‘q";
+    $("reviewList").innerHTML = reviews.length ? reviews.map(r => `
+      <div class="review-item">
+        <div class="review-head">
+          <span class="review-user">${escapeHtml(r.user_name || "Mijoz")}</span>
+          <span class="review-date">${escapeHtml(r.date || "")}</span>
+        </div>
+        <div class="review-stars" style="font-size:16px">${reviewStars(r.rating)}</div>
+        <div class="review-text">${escapeHtml(r.text || "")}</div>
+      </div>
+    `).join("") : '<div class="review-login-note">Bu mahsulotga hali sharh qoldirilmagan.</div>';
+  }catch(e){
+    $("reviewAverage").textContent = "—";
+    $("reviewStars").textContent = "☆☆☆☆☆";
+    $("reviewCount").textContent = "Sharhlarni yuklab bo‘lmadi";
+    $("reviewList").innerHTML = '<div class="review-login-note">Sharhlar vaqtincha mavjud emas.</div>';
+  }
+}
+
+function updateReviewPicker(){
+  document.querySelectorAll("#starPicker button").forEach(btn => {
+    btn.classList.toggle("active", Number(btn.dataset.star) <= selectedReviewRating);
+  });
+}
+
+async function submitProductReview(){
+  const user = tg?.initDataUnsafe?.user;
+  if(!user){
+    $("reviewNote").textContent = "Sharh qoldirish uchun Telegram orqali kiring.";
+    return;
+  }
+  if(!currentProduct) return;
+  if(!selectedReviewRating){
+    $("reviewNote").textContent = "Avval 1–5 yulduzdan birini tanlang.";
+    return;
+  }
+  const text = $("reviewText").value.trim();
+  if(text.length < 3){
+    $("reviewNote").textContent = "Sharh kamida 3 ta belgidan iborat bo‘lsin.";
+    return;
+  }
+
+  const btn = $("submitReview");
+  btn.disabled = true;
+  btn.textContent = "Yuborilmoqda...";
+  $("reviewNote").textContent = "";
+
+  try{
+    const res = await fetch(API_URL + "/reviews", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        product_id:String(currentProduct.id),
+        user_id:user.id,
+        user_name:user.first_name || user.username || "Mijoz",
+        rating:selectedReviewRating,
+        text:text
+      })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || "review");
+    $("reviewText").value = "";
+    selectedReviewRating = 0;
+    updateReviewPicker();
+    $("reviewNote").textContent = "✅ Sharhingiz qabul qilindi.";
+    await loadProductReviews(currentProduct.id);
+  }catch(e){
+    $("reviewNote").textContent = "❌ " + (e.message || "Sharh yuborilmadi.");
+  }finally{
+    btn.disabled = false;
+    btn.textContent = "Sharh yuborish";
+  }
+}
 
 function openDetail(id){
 
@@ -1880,7 +1982,6 @@ $("profileFavorites").onclick = () => {
 $("profileOrders").onclick = async () => {
   showView("profileView");
   setNavActive("navProfile");
-  loadBonus();
   const box = $("ordersBox");
   box.innerHTML = '<div class="empty">📦 Buyurtmalar yuklanmoqda...</div>';
 
@@ -2095,7 +2196,6 @@ function showFavoritesView(list){
 /* Start */
 loadTelegramProfile();
 loadProducts();
-loadBonus();
 </script>
 
 </body>
