@@ -297,6 +297,14 @@ input:focus{border-color:var(--accent)}
   background:var(--accent);color:#fff;
   border:0;border-radius:10px;
   padding:14px;font-size:15px;font-weight:800;
+  cursor:pointer;
+}
+#cartSheet .checkout-btn{
+  position:sticky;
+  bottom:0;
+  z-index:3;
+  margin-top:14px;
+  box-shadow:0 -6px 14px rgba(0,0,0,.08);
 }
 
 /* Product detail */
@@ -605,7 +613,7 @@ input:focus{border-color:var(--accent)}
 
 <!-- FLOATING CART -->
 <div class="cart-bar" id="cartBar">
-  <span id="cartBarText">Savat</span>
+  <span id="cartBarText">Sotib olish</span>
   <span id="cartBarTotal"></span>
 </div>
 
@@ -1428,9 +1436,15 @@ $("overlay").onclick = closeSheets;
 
 $("cartBar").onclick = () => {
 
-  renderCartLines();
+  if(!cartCount()){
+    alert("Savat bo‘sh.");
+    return;
+  }
+
+  $("checkoutTotal").textContent = money(cartTotal());
   $("cartBar").style.display = "none";
-  openSheet($("cartSheet"));
+  $("cartSheet").style.display = "none";
+  openSheet($("checkoutSheet"));
 
 };
 
