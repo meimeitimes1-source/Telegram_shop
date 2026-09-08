@@ -306,6 +306,15 @@ input:focus{border-color:var(--accent)}
   margin-top:14px;
   box-shadow:0 -6px 14px rgba(0,0,0,.08);
 }
+#checkoutSheet{
+  padding-bottom:calc(28px + env(safe-area-inset-bottom));
+}
+#checkoutSheet #submitOrder{
+  display:block;
+  position:relative;
+  z-index:2;
+  margin-bottom:4px;
+}
 
 /* Product detail */
 .detail-sheet{
@@ -1421,6 +1430,11 @@ function openSheet(sheet){
   $("overlay").style.display = "block";
   sheet.style.display = "block";
 
+  // Sheet ochilganda pastki navigatsiya va floating savat
+  // ustidan chiqib ketmasligi uchun yashiriladi.
+  $("bottomNav").style.display = "none";
+  $("cartBar").style.display = "none";
+
 }
 
 function closeSheets(){
@@ -1428,6 +1442,8 @@ function closeSheets(){
   $("overlay").style.display = "none";
   $("cartSheet").style.display = "none";
   $("checkoutSheet").style.display = "none";
+
+  $("bottomNav").style.display = "flex";
   updateCartUI();
 
 }
