@@ -32,20 +32,16 @@ logging.basicConfig(level=logging.INFO)
 
 bot = Bot(
     token=BOT_TOKEN,
-    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML),
 )
 
 dp = Dispatcher()
 router = Router()
 dp.include_router(router)
 
-# Admin qaysi mahsulotga rasm yuborayotganini vaqtincha saqlaydi
-pending_photo = {}
+# Admin qaysi mahsulotga rasm qo'yayotganini vaqtincha saqlaydi
+pending_photo_product = {}
 
-
-# =========================
-# PRODUCTS
-# =========================
 
 def load_products():
     if not PRODUCTS_FILE.exists():
@@ -54,7 +50,8 @@ def load_products():
     try:
         with open(PRODUCTS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except (json.JSONDecodeError, OSError):
+        logging.exception("products.json o'qilmadi")
         return []
 
 
@@ -63,10 +60,6 @@ def save_products(products):
         json.dump(products, f, ensure_ascii=False, indent=2)
 
 
-# =========================
-# ORDERS
-# =========================
-
 def save_order(order):
     orders = []
 
@@ -74,7 +67,7 @@ def save_order(order):
         try:
             with open(ORDERS_FILE, "r", encoding="utf-8") as f:
                 orders = json.load(f)
-        except Exception:
+        except (json.JSONDecodeError, OSError):
             orders = []
 
     orders.append(order)
@@ -87,21 +80,14 @@ def save_order(order):
         append_order_to_sheet(order)
     except Exception as e:
         logging.warning(
-            f"Google Sheets'ga yozilmadi (ixtiyoriy): {e}"
+            "Google Sheets'ga yozilmadi (ixtiyoriy): %s",
+            e,
         )
 
-
-# =========================
-# ADMIN
-# =========================
 
 def is_admin(user_id: int) -> bool:
     return ADMIN_ID != 0 and user_id == ADMIN_ID
 
-
-# =========================
-# PAYMENT
-# =========================
 
 def payment_label(payment: str) -> str:
     return {
@@ -122,8 +108,7 @@ def payment_link(payment: str, amount: int, user_id: int) -> str:
         amount_tiyin = amount * 100
 
         return (
-            f"https://checkout.paycom.uz/"
-            f"{merchant_id}"
+            f"https://checkout.paycom.uz/{merchant_id}"
             f"?amount={amount_tiyin}"
             f"&account[user_id]={user_id}"
         )
@@ -135,7 +120,7 @@ def payment_link(payment: str, amount: int, user_id: int) -> str:
             return "⚠️ Click hali ulanmagan. Admin bilan bog'laning."
 
         return (
-            f"https://my.click.uz/services/pay"
+            "https://my.click.uz/services/pay"
             f"?service_id={merchant_id}"
             f"&amount={amount}"
             f"&transaction_param={user_id}"
@@ -154,4 +139,21 @@ async def cmd_start(message: Message):
     if not WEBAPP_URL:
         await message.answer(
             "Do'kon hali sozlanmagan. "
-            "
+            "Admin WEBAPP_URL manzilini kiritishi kerak."
+        )
+        return
+
+    kb = ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(
+                    text="🛍 Do'konni ochish",
+                    web_app=WebAppInfo(url=WEBAPP_URL),
+                )
+            ]
+        ],
+        resize_keyboard=True,
+    )
+
+    await message.answer(
+        "Assalomu alaykum! 👋
